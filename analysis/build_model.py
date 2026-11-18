@@ -20,6 +20,26 @@ for dt, g in cor.groupby('date'):
     i = d.index[d.date == dt]
     d.loc[i, 'nev_day'] += len(g); d.loc[i, 'aud'] += g.aud.sum()
 d['season'] = d.date.dt.month.isin([3, 4, 5, 9, 10, 11]).astype(int)
+d['restored'] = 0
+
+# ---- 주차대수만 깨진 날 되살리기 (만차 모델 전용) ----
+# 8~9월 등은 주차대수 집계가 깨졌지만 공연·관람객·기온·혼잡도(만차) 기록은 정상 → 만차 확률 모델에는 사용
+def _nev(s):
+    return [] if not isinstance(s, str) or not s else [e.strip() for e in re.split(r',\s(?=[^\s])', s)]
+_g = h.groupby('date').agg(n=('h', 'size'), aud=('aud', 'max'), temp=('temp', 'max'), hol=('hol', 'first'), dow=('dow', 'first'),
+                           peak=('park', 'max'), nev_day=('ev', lambda x: len({e for s in x.dropna() for e in _nev(s)})))
+_full = log[log['혼잡도'] == '만차'].groupby('등록일')['주차구역'].nunique()
+_LOG0 = pd.Timestamp('2025-02-12')
+R = _g[(~_g.index.isin(d.date)) & (_g.index >= _LOG0) & (_g.index <= pd.Timestamp('2025-12-31')) & (_g.n >= 20) & _g.temp.notna()].copy()
+R = R.reset_index()
+R['we'] = ((R.dow >= 5) | R.hol.notna()).astype(int)
+R['full'] = R.date.map(lambda x: float(_full.get(x, 0)))
+R['season'] = R.date.dt.month.isin([3, 4, 5, 9, 10, 11]).astype(int)
+R['restored'] = 1
+R['peak_h'] = None
+for dt, g in cor.groupby('date'):
+    i = R.index[R.date == dt]
+    R.loc[i, 'nev_day'] += len(g); R.loc[i, 'aud'] += g.aud.sum()
 
 # ---------------- 특징 ----------------
 def feats(df):
@@ -33,7 +53,7 @@ def feats(df):
 
 FEATS = ['we', 'nev', 'aud10k', 'temp', 'season']
 LOG_START = pd.Timestamp('2025-02-12')          # 주차장 혼잡도 기록 시작일
-cov = d[d.date >= LOG_START].copy()
+cov = pd.concat([d[d.date >= LOG_START], R[['date', 'we', 'nev_day', 'aud', 'temp', 'season', 'full', 'restored']]], ignore_index=True).sort_values('date').reset_index(drop=True)
 cov['y'] = (cov.full > 0).astype(int)
 
 Xc, yc = feats(cov), cov.y
@@ -96,20 +116,21 @@ temp_norm = {m: round(float(mt.loc[m, 'mean']), 1) if m in mt.index and mt.loc[m
 
 # ---------------- 2025 과거 검증 캘린더 ----------------
 vmap = {r.ev.strip(): r.venue for r in ven.itertuples()}
-evh = h[h.ev.notna() & h.date.isin(valid)]
+A = pd.concat([d.assign(restored=0), R], ignore_index=True).sort_values('date').reset_index(drop=True)
+evh = h[h.ev.notna() & h.date.isin(set(A.date))]
 single = {}
 for r in evh.itertuples():
     names = [x.strip() for x in re.split(r',\s(?=[^\s])', r.ev)]
     if len(names) == 1:
         single.setdefault(names[0], []).append(r.aud)
 cal = []
-pc = clf.predict_proba(feats(d))[:, 1]
+pc = clf.predict_proba(feats(A))[:, 1]
 # 검증용: 그 날을 학습에서 뺀 교차검증 확률(10회 평균)로 달력 표시
 pcv_map = dict(zip(cov.date.dt.strftime('%Y-%m-%d'), pcv))
-pk = reg.predict(feats(d))
-fz = poi.predict(feats(d))
+pk = reg.predict(feats(A))
+fz = poi.predict(feats(A))
 logged = set(full['등록일'].dt.normalize()) | set(log['등록일'].dt.normalize())
-for i, r in d.reset_index(drop=True).iterrows():
+for i, r in A.iterrows():
     day = evh[evh.date == r.date]
     names = []
     for e in day.ev.unique():
@@ -128,7 +149,7 @@ for i, r in d.reset_index(drop=True).iterrows():
         'date': r.date.strftime('%Y-%m-%d'), 'dow': int(r.dow), 'we': int(r.we), 'hol': r.hol if isinstance(r.hol, str) else '',
         'nev': int(r.nev_day), 'aud': int(r.aud), 'temp': float(r.temp),
         'p_full': round(float(pcv_map.get(r.date.strftime('%Y-%m-%d'), pc[i])), 3), 'oof': int(r.date.strftime('%Y-%m-%d') in pcv_map), 'pred_peak': int(round(pk[i])), 'pred_zones': round(float(fz[i]), 1),
-        'peak': int(r.peak), 'peak_h': int(r.peak_h),
+        'peak': None if r.restored else int(r.peak), 'peak_h': None if r.restored else int(r.peak_h), 'restored': int(r.restored),
         'full_zones': int(r.full) if r.date >= LOG_START else None,
         'events': evs,
     })
@@ -157,7 +178,7 @@ summ = []
 for we in [1, 0]:
     for cname in ['공연 없음', '1개', '2개 이상']:
         s_ = d[(d.we == we) & (d.cat2 == cname)]
-        sc = s_[s_.date >= LOG_START]
+        sc = cov[(cov.we == we) & (cov.nev_day.apply(cat) == cname)]
         summ.append({'we': we, 'cat': cname, 'n': int(len(s_)), 'peak': int(round(s_.peak.mean())) if len(s_) else None,
                      'n_log': int(len(sc)), 'full_rate': round(float((sc.full > 0).mean()), 3) if len(sc) else None,
                      'full_zones': round(float(sc.full.mean()), 2) if len(sc) else None})
@@ -167,7 +188,7 @@ lr = LinearRegression().fit(wk[['aud']] / 10000, wk.peak)
 
 out = {
     'meta': {
-        'trained_days_peak': int(len(d)), 'trained_days_full': int(len(cov)), 'full_days': int(yc.sum()),
+        'trained_days_peak': int(len(d)), 'trained_days_full': int(len(cov)), 'full_days': int(yc.sum()), 'restored_days': int(len(R)),
         'period': '2025-01-01 ~ 2025-12-07 (품질 점검 후 유효일)',
     },
     'clf': {'feats': FEATS, 'coef': [round(float(c), 5) for c in clf.coef_[0]], 'intercept': round(float(clf.intercept_[0]), 5)},
