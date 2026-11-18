@@ -122,17 +122,15 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
 .mhead{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 4px}
 .mhead b{min-width:88px;text-align:center}
 .mnav{width:28px;height:28px;border:1px solid var(--axis);border-radius:6px;background:#fff;color:var(--navy);font:inherit;font-size:16px;line-height:1;cursor:pointer}
-.mcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
-.mcal .hd{font-size:12px;color:var(--ink2);text-align:center}
+.mcal{display:grid;grid-template-columns:repeat(7,36px);gap:2px 4px;width:max-content}
+.mcal .hd{font-size:12px;color:var(--ink2);text-align:center;padding:2px 0}
 .mcal .hd.sun{color:var(--s3)} .mcal .hd.sat{color:var(--navy2)}
-.mc{min-width:0;min-height:44px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:4px 5px;font:inherit;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:1px;transition:transform .15s ease, box-shadow .15s ease}
-.mc .n{font-size:12px;font-weight:700} .mc .n.hol{color:var(--s3)}
-.mc .r{display:flex;align-items:center;gap:3px;font-size:11.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
-.mc.c0 .r{color:#0a7a0a} .mc.c1{background:#fffaf0;border-left:3px solid var(--s1)} .mc.c2{background:#fff4ee;border-left:3px solid var(--s2)} .mc.c3{background:#fdeeee;border-left:3px solid var(--s3)} .mc.c0{border-left:3px solid var(--s0)}
-.mc.c3 .r{color:var(--s3);font-weight:700}
-.mc:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.08)}
-.mc.sel{transform:translateY(-3px) scale(1.06);box-shadow:0 8px 18px rgba(19,63,43,.28),0 2px 4px rgba(19,63,43,.18);z-index:2;position:relative}
-@media (max-width:560px){.mc .r .ic{display:none}.mc{padding:3px 2px}}
+.mc{width:34px;height:34px;border:none;border-radius:50%;background:transparent;font:inherit;font-size:13.5px;color:var(--ink);cursor:pointer;justify-self:center;font-variant-numeric:tabular-nums}
+.mc.hol{color:var(--s3)} .mc.sat{color:var(--navy2)}
+.mc:hover{background:#eef2ef}
+.mc.sel,.mc.sel:hover{background:var(--navy);color:#fff;font-weight:700}
+.mc:focus-visible{outline:2px solid var(--navy);outline-offset:1px}
+.mhead b{min-width:100px}
 .alt{display:grid;grid-template-columns:96px 1fr 64px;gap:6px;align-items:center;font-size:12.5px;margin:3px 0}
 .alt .r{display:flex;align-items:center;gap:4px}
 .bar{height:14px;border-radius:0 4px 4px 0;min-width:2px}
@@ -216,18 +214,16 @@ footer{max-width:1240px;margin:0 auto;padding:0 20px 30px;font-size:12px;color:v
       <h2><span class="ko">대관 시뮬레이터</span><span class="en">Booking simulator</span></h2>
       <div class="note ko">대관 신청이 들어온 날짜에 그날 이미 잡힌 행사와 신청 행사를 넣으면, 승인했을 때의 주차 만차 위험과 퇴장 겹침 위험을 계산합니다.</div>
       <div class="note en">Enter the requested date, the events already booked that day and the new request. The tool estimates the parking-full risk and the exit-overlap risk if the request is approved.</div>
-      <div class="step"><span class="sn">1</span><b><span class="ko">날짜 고르기</span><span class="en">Pick a date</span></b><span class="note"><span class="ko">— 아래 행사를 이 달 다른 날 열면 어떤지, 칸을 눌러 바로 바꿉니다</span><span class="en">— how the same events would fare on other days; tap to switch</span></span></div>
+      <div class="step"><span class="sn">1</span><b><span class="ko">날짜 고르기</span><span class="en">Pick a date</span></b><span class="note"><span class="ko">— 달력에서 날짜를 누르세요</span><span class="en">— tap a date</span></span></div>
       <div class="mhead">
         <button class="mnav" id="mPrev" aria-label="이전 달 / Previous month">‹</button><b id="mLbl"></b><button class="mnav" id="mNext" aria-label="다음 달 / Next month">›</button>
-        <span class="mleg"></span>
       </div>
       <div class="mcal" id="mcal"></div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn ghost" id="sPrev" aria-label="이전 날 / Previous day">◀</button>
-        <input type="date" id="sDate" aria-label="날짜 / Date">
-        <button class="btn ghost" id="sNext" aria-label="다음 날 / Next day">▶</button>
+      <div class="row" style="margin-top:8px">
+        <input type="hidden" id="sDate">
+        <b id="sPicked"></b>
         <label class="row" style="gap:4px"><input type="checkbox" id="sHol"> <span class="ko">공휴일</span><span class="en">Public holiday</span></label>
-        <span class="note" id="sDow"></span>
+        <span class="note" id="sDow" style="display:none"></span>
       </div>
     </div>
     <div class="card" id="simEvs">
@@ -726,15 +722,14 @@ function simCalc(dstr, hol){
 }
 let SIM = null, EX = false, SM = null;
 function renderMini(){
-  const d = $('#sDate').value, hol = $('#sHol').checked, {y, m} = SM;
+  const d = $('#sDate').value, {y, m} = SM;
   $('#mLbl').textContent = L(`${y}년 ${m}월`, `${MON_EN[m-1]} ${y}`);
   const first = new Date(y, m-1, 1).getDay(), days = new Date(y, m, 0).getDate();
   let h = DOW.map((x,i)=>`<div class="hd ${i==0?'sun':i==6?'sat':''}">${dw(i)}</div>`).join('');
   for(let i=0;i<first;i++) h += '<div></div>';
   for(let k=1;k<=days;k++){
-    const s = ds(y,m,k), rr = simCalc(s, s===d && hol), dow = (first+k-1)%7;
-    h += `<button class="mc c${rr.g} ${s===d?'sel':''}" data-s="${s}" title="${md(s)} · ${gname(rr.g)} · ${L(`10번 중 ${ten(rr.p)}번`, `${ten(rr.p)} of 10`)}">
-      <span class="n ${dow==0||HOL.has(s)?'hol':''}">${k}</span><span class="r">${IC(rr.g)}${ten(rr.p)}/10</span></button>`;
+    const s = ds(y,m,k), dow = (first+k-1)%7;
+    h += `<button class="mc ${dow==0||HOL.has(s)?'hol':dow==6?'sat':''} ${s===d?'sel':''}" data-s="${s}" aria-label="${md(s)}" aria-pressed="${s===d}">${k}</button>`;
   }
   $('#mcal').innerHTML = h;
   $('#mcal').querySelectorAll('.mc').forEach(b=> b.onclick = ()=>{ EX = false; $('#sDate').value = b.dataset.s; applyDate(); });
@@ -742,7 +737,7 @@ function renderMini(){
 function runSim(){
   const d = $('#sDate').value; if(!d) return;
   const dt = new Date(d), hol = $('#sHol').checked;
-  $('#sDow').textContent = `${L(DOW[dt.getDay()]+'요일', DOW_EN[dt.getDay()])} ${HOL.has(d)?L('· 공휴일','· public holiday'):''}`;
+  $('#sPicked').textContent = L('선택: ','Selected: ') + ymd(d) + (HOL.has(d)?L(' · 공휴일',' · public holiday'):'');
   const r = simCalc(d, hol);
   const evs = EVS.map(e=>({name:e.v, label:vn(e.v), venue:e.v, aud:+e.a||0, start:e.s, dur:e.d, ga: typeOf(e.v).ga}));
   const eg = egress(evs);
@@ -799,8 +794,6 @@ async function copyText(txt, out){
 }
 function applyDate(){ $('#sTemp').value = tempNorm($('#sDate').value); $('#sHol').checked = HOL.has($('#sDate').value); runSim(); }
 $('#sDate').onchange = ()=>{ EX = false; applyDate(); };
-function shiftDay(n){ const t = new Date($('#sDate').value+'T00:00'); t.setDate(t.getDate()+n); $('#sDate').value = ds(t.getFullYear(), t.getMonth()+1, t.getDate()); EX = false; applyDate(); }
-$('#sPrev').onclick = ()=>shiftDay(-1); $('#sNext').onclick = ()=>shiftDay(1);
 $('#mPrev').onclick = ()=>{ SM.m--; if(SM.m<1){SM.m=12;SM.y--;} renderMini(); };
 $('#mNext').onclick = ()=>{ SM.m++; if(SM.m>12){SM.m=1;SM.y++;} renderMini(); };
 $('#sHol').onchange = ()=>{ EX = false; runSim(); }; $('#sTemp').oninput = ()=>{ EX = false; runSim(); };
