@@ -29,7 +29,12 @@ nav button.on{background:#fff;color:var(--navy);font-weight:700}
 main{max-width:1240px;margin:0 auto;padding:18px 20px 40px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
 .grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px}
-@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}#t-sim .grid>#simOut{order:-1}}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.simgrid{grid-template-areas:"date out" "evs out";grid-template-rows:auto 1fr;align-items:start}
+#simDate{grid-area:date} #simEvs{grid-area:evs} #simOut{grid-area:out}
+@media (max-width:900px){.simgrid{grid-template-areas:"date" "out" "evs";grid-template-rows:auto}}
+.step{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0 4px;font-size:14.5px}
+.step .sn{width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
 h2{font-size:16px;margin:0 0 4px;color:var(--navy)}
 h3{font-size:14px;margin:14px 0 6px}
 .note{font-size:12px;color:var(--ink2)}
@@ -114,13 +119,13 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
 .evrow select,.evrow input{min-width:0;width:100%}
 .evrow button{border:none;background:none;color:var(--muted);cursor:pointer;font-size:16px}
 @media (max-width:560px){.evrow{grid-template-columns:1.3fr 1fr .8fr .8fr 24px}}
-.mhead{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0 4px}
+.mhead{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 4px}
 .mhead b{min-width:88px;text-align:center}
 .mnav{width:28px;height:28px;border:1px solid var(--axis);border-radius:6px;background:#fff;color:var(--navy);font:inherit;font-size:16px;line-height:1;cursor:pointer}
 .mcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
 .mcal .hd{font-size:12px;color:var(--ink2);text-align:center}
 .mcal .hd.sun{color:var(--s3)} .mcal .hd.sat{color:var(--navy2)}
-.mc{min-width:0;border:1px solid var(--line);border-radius:6px;background:#fff;padding:3px 4px;font:inherit;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:1px;transition:transform .15s ease, box-shadow .15s ease}
+.mc{min-width:0;min-height:44px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:4px 5px;font:inherit;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:1px;transition:transform .15s ease, box-shadow .15s ease}
 .mc .n{font-size:12px;font-weight:700} .mc .n.hol{color:var(--s3)}
 .mc .r{display:flex;align-items:center;gap:3px;font-size:11.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
 .mc.c0 .r{color:#0a7a0a} .mc.c1{background:#fffaf0;border-left:3px solid var(--s1)} .mc.c2{background:#fff4ee;border-left:3px solid var(--s2)} .mc.c3{background:#fdeeee;border-left:3px solid var(--s3)} .mc.c0{border-left:3px solid var(--s0)}
@@ -206,29 +211,27 @@ footer{max-width:1240px;margin:0 auto;padding:0 20px 30px;font-size:12px;color:v
 
 <!-- ② 시뮬레이터 -->
 <section id="t-sim" class="hide">
-  <div class="grid">
-    <div class="card">
+  <div class="grid simgrid">
+    <div class="card" id="simDate">
       <h2><span class="ko">대관 시뮬레이터</span><span class="en">Booking simulator</span></h2>
       <div class="note ko">대관 신청이 들어온 날짜에 그날 이미 잡힌 행사와 신청 행사를 넣으면, 승인했을 때의 주차 만차 위험과 퇴장 겹침 위험을 계산합니다.</div>
       <div class="note en">Enter the requested date, the events already booked that day and the new request. The tool estimates the parking-full risk and the exit-overlap risk if the request is approved.</div>
-      <h3><span class="ko">날짜</span><span class="en">Date</span></h3>
-      <div class="row">
+      <div class="step"><span class="sn">1</span><b><span class="ko">날짜 고르기</span><span class="en">Pick a date</span></b><span class="note"><span class="ko">— 아래 행사를 이 달 다른 날 열면 어떤지, 칸을 눌러 바로 바꿉니다</span><span class="en">— how the same events would fare on other days; tap to switch</span></span></div>
+      <div class="mhead">
+        <button class="mnav" id="mPrev" aria-label="이전 달 / Previous month">‹</button><b id="mLbl"></b><button class="mnav" id="mNext" aria-label="다음 달 / Next month">›</button>
+        <span class="mleg"></span>
+      </div>
+      <div class="mcal" id="mcal"></div>
+      <div class="row" style="margin-top:10px">
         <button class="btn ghost" id="sPrev" aria-label="이전 날 / Previous day">◀</button>
-        <input type="date" id="sDate">
+        <input type="date" id="sDate" aria-label="날짜 / Date">
         <button class="btn ghost" id="sNext" aria-label="다음 날 / Next day">▶</button>
         <label class="row" style="gap:4px"><input type="checkbox" id="sHol"> <span class="ko">공휴일</span><span class="en">Public holiday</span></label>
         <span class="note" id="sDow"></span>
       </div>
-      <div class="mhead">
-        <button class="mnav" id="mPrev" aria-label="이전 달 / Previous month">‹</button><b id="mLbl"></b><button class="mnav" id="mNext" aria-label="다음 달 / Next month">›</button>
-        <span class="note"><span class="ko">아래 행사를 이 달 다른 날에 열면? 날짜를 눌러 바로 바꾸세요.</span><span class="en">Same events on other days this month — tap a date to switch.</span></span>
-      </div>
-      <div class="mcal" id="mcal"></div>
-      <h3><span class="ko">최고기온</span><span class="en">Max temperature</span></h3>
-      <div class="row">
-        <input type="number" id="sTemp" step="0.5" style="width:90px"> <span class="note"><span class="ko">℃ · 기본값은 그 달 평년값, 3일 전부터는 기상청 단기예보로 바꿔 넣습니다.</span><span class="en">°C · defaults to the monthly normal; from D-3 use the KMA short-range forecast.</span></span>
-      </div>
-      <h3><span class="ko">그날 행사</span><span class="en">Events that day</span> <span class="note"><span class="ko">(이미 확정된 행사 + 신청 행사 + 공원 내 집회·축제)</span><span class="en">(confirmed + requested + rallies/festivals in the park)</span></span></h3>
+    </div>
+    <div class="card" id="simEvs">
+      <div class="step" style="margin-top:0"><span class="sn">2</span><b><span class="ko">그날 행사 넣기</span><span class="en">Add the day's events</span></b><span class="note"><span class="ko">(이미 확정된 행사 + 신청 행사 + 공원 내 집회·축제)</span><span class="en">(confirmed + requested + rallies/festivals in the park)</span></span></div>
       <div class="evrow note" style="margin-bottom:0"><span><span class="ko">공연장·행사 유형</span><span class="en">Venue / type</span></span><span><span class="ko">예상 인원(명)</span><span class="en">Expected people</span></span><span><span class="ko">시작</span><span class="en">Start</span></span><span><span class="ko">소요(분)</span><span class="en">Length (min)</span></span><span></span></div>
       <div id="evList"></div>
       <div class="row" style="margin-top:6px">
@@ -242,6 +245,10 @@ footer{max-width:1240px;margin:0 auto;padding:0 20px 30px;font-size:12px;color:v
         <button class="btn ghost" id="ex3"><span class="ko">88잔디마당 공사 기간</span><span class="en">During 88 Field works</span></button>
       </div>
       <div id="simWarn"></div>
+      <h3><span class="ko">최고기온</span><span class="en">Max temperature</span></h3>
+      <div class="row">
+        <input type="number" id="sTemp" step="0.5" style="width:90px"> <span class="note"><span class="ko">℃ · 기본값은 그 달 평년값, 3일 전부터는 기상청 단기예보로 바꿔 넣습니다.</span><span class="en">°C · defaults to the monthly normal; from D-3 use the KMA short-range forecast.</span></span>
+      </div>
     </div>
     <div class="card" id="simOut"></div>
   </div>
