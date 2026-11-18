@@ -217,7 +217,7 @@ out = {
     },
     'profile': prof, 'zones': zones, 'temp_norm': temp_norm, 'calendar': cal,
     'boot': boot, 'thresholds': thr, 'summary': summ, 'peak_per_10k_weekend': round(float(lr.coef_[0])),
-    'corrections': [{'date': r.date.strftime('%Y-%m-%d'), 'name': KO.get(r.name, r.name), 'venue': r.venue, 'aud': int(r.aud), 'source': r.source, 'basis': r.aud_basis} for r in cor.itertuples()],
+    'corrections': [{'date': r.date.strftime('%Y-%m-%d'), 'name': KO.get(r.name, r.name), 'orig': r.name, 'venue': r.venue, 'aud': int(r.aud), 'source': r.source, 'basis': r.aud_basis} for r in cor.itertuples()],
 }
 json.dump(out, open('/home/claude/model/model.json', 'w', encoding='utf-8'), ensure_ascii=False)
 print(json.dumps({k: out[k] for k in ['meta', 'clf', 'reg', 'poi', 'eval', 'thresholds', 'summary', 'peak_per_10k_weekend']}, ensure_ascii=False))
