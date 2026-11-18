@@ -114,6 +114,20 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
 .evrow select,.evrow input{min-width:0;width:100%}
 .evrow button{border:none;background:none;color:var(--muted);cursor:pointer;font-size:16px}
 @media (max-width:560px){.evrow{grid-template-columns:1.3fr 1fr .8fr .8fr 24px}}
+.mhead{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0 4px}
+.mhead b{min-width:88px;text-align:center}
+.mnav{width:28px;height:28px;border:1px solid var(--axis);border-radius:6px;background:#fff;color:var(--navy);font:inherit;font-size:16px;line-height:1;cursor:pointer}
+.mcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.mcal .hd{font-size:12px;color:var(--ink2);text-align:center}
+.mcal .hd.sun{color:var(--s3)} .mcal .hd.sat{color:var(--navy2)}
+.mc{min-width:0;border:1px solid var(--line);border-radius:6px;background:#fff;padding:3px 4px;font:inherit;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:1px;transition:transform .15s ease, box-shadow .15s ease}
+.mc .n{font-size:12px;font-weight:700} .mc .n.hol{color:var(--s3)}
+.mc .r{display:flex;align-items:center;gap:3px;font-size:11.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.mc.c0 .r{color:#0a7a0a} .mc.c1{background:#fffaf0;border-left:3px solid var(--s1)} .mc.c2{background:#fff4ee;border-left:3px solid var(--s2)} .mc.c3{background:#fdeeee;border-left:3px solid var(--s3)} .mc.c0{border-left:3px solid var(--s0)}
+.mc.c3 .r{color:var(--s3);font-weight:700}
+.mc:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.08)}
+.mc.sel{transform:translateY(-3px) scale(1.06);box-shadow:0 8px 18px rgba(45,55,25,.28),0 2px 4px rgba(45,55,25,.18);z-index:2;position:relative}
+@media (max-width:560px){.mc .r .ic{display:none}.mc{padding:3px 2px}}
 .alt{display:grid;grid-template-columns:96px 1fr 64px;gap:6px;align-items:center;font-size:12.5px;margin:3px 0}
 .alt .r{display:flex;align-items:center;gap:4px}
 .bar{height:14px;border-radius:0 4px 4px 0;min-width:2px}
@@ -199,10 +213,17 @@ footer{max-width:1240px;margin:0 auto;padding:0 20px 30px;font-size:12px;color:v
       <div class="note en">Enter the requested date, the events already booked that day and the new request. The tool estimates the parking-full risk and the exit-overlap risk if the request is approved.</div>
       <h3><span class="ko">날짜</span><span class="en">Date</span></h3>
       <div class="row">
+        <button class="btn ghost" id="sPrev" aria-label="이전 날 / Previous day">◀</button>
         <input type="date" id="sDate">
+        <button class="btn ghost" id="sNext" aria-label="다음 날 / Next day">▶</button>
         <label class="row" style="gap:4px"><input type="checkbox" id="sHol"> <span class="ko">공휴일</span><span class="en">Public holiday</span></label>
         <span class="note" id="sDow"></span>
       </div>
+      <div class="mhead">
+        <button class="mnav" id="mPrev" aria-label="이전 달 / Previous month">‹</button><b id="mLbl"></b><button class="mnav" id="mNext" aria-label="다음 달 / Next month">›</button>
+        <span class="note"><span class="ko">아래 행사를 이 달 다른 날에 열면? 날짜를 눌러 바로 바꾸세요.</span><span class="en">Same events on other days this month — tap a date to switch.</span></span>
+      </div>
+      <div class="mcal" id="mcal"></div>
       <h3><span class="ko">최고기온</span><span class="en">Max temperature</span></h3>
       <div class="row">
         <input type="number" id="sTemp" step="0.5" style="width:90px"> <span class="note"><span class="ko">℃ · 기본값은 그 달 평년값, 3일 전부터는 기상청 단기예보로 바꿔 넣습니다.</span><span class="en">°C · defaults to the monthly normal; from D-3 use the KMA short-range forecast.</span></span>
@@ -221,8 +242,6 @@ footer{max-width:1240px;margin:0 auto;padding:0 20px 30px;font-size:12px;color:v
         <button class="btn ghost" id="ex3"><span class="ko">88잔디마당 공사 기간</span><span class="en">During 88 Field works</span></button>
       </div>
       <div id="simWarn"></div>
-      <details class="alts" id="altBox"><summary><span class="ko">날짜를 옮기면?</span><span class="en">What if we move the date?</span> <span class="note"><span class="ko">(같은 행사를 ±7일로 옮겼을 때 만차 가능성)</span><span class="en">(same events moved ±7 days)</span></span></summary>
-      <div id="alts"></div></details>
     </div>
     <div class="card" id="simOut"></div>
   </div>
@@ -698,7 +717,21 @@ function simCalc(dstr, hol){
   const we = (isWe(dstr)||hol)?1:0, aud = EVS.reduce((s,e)=>s+(+e.a||0),0);
   return predict(we, EVS.length, aud, +$('#sTemp').value, seasonOf(dstr));
 }
-let SIM = null, EX = false;
+let SIM = null, EX = false, SM = null;
+function renderMini(){
+  const d = $('#sDate').value, hol = $('#sHol').checked, {y, m} = SM;
+  $('#mLbl').textContent = L(`${y}년 ${m}월`, `${MON_EN[m-1]} ${y}`);
+  const first = new Date(y, m-1, 1).getDay(), days = new Date(y, m, 0).getDate();
+  let h = DOW.map((x,i)=>`<div class="hd ${i==0?'sun':i==6?'sat':''}">${dw(i)}</div>`).join('');
+  for(let i=0;i<first;i++) h += '<div></div>';
+  for(let k=1;k<=days;k++){
+    const s = ds(y,m,k), rr = simCalc(s, s===d && hol), dow = (first+k-1)%7;
+    h += `<button class="mc c${rr.g} ${s===d?'sel':''}" data-s="${s}" title="${md(s)} · ${gname(rr.g)} · ${L(`10번 중 ${ten(rr.p)}번`, `${ten(rr.p)} of 10`)}">
+      <span class="n ${dow==0||HOL.has(s)?'hol':''}">${k}</span><span class="r">${IC(rr.g)}${ten(rr.p)}/10</span></button>`;
+  }
+  $('#mcal').innerHTML = h;
+  $('#mcal').querySelectorAll('.mc').forEach(b=> b.onclick = ()=>{ EX = false; $('#sDate').value = b.dataset.s; applyDate(); });
+}
 function runSim(){
   const d = $('#sDate').value; if(!d) return;
   const dt = new Date(d), hol = $('#sHol').checked;
@@ -727,16 +760,8 @@ function runSim(){
   $('#memo').textContent = memoText(SIM);
   $('#memoCopy').onclick = ()=>copyText($('#memo').textContent, '#memoCopied');
   $('#sLeg').innerHTML = lineChart($('#sChart'), [{n:L('예측','Forecast'), v:r.curve, c:'var(--pred)', dash:true}], {band:[Math.max(r.ph-1,0), Math.min(r.ph+1,23)]});
-  let a = '';
-  for(let k=-7;k<=7;k++){
-    const t = new Date(dt); t.setDate(t.getDate()+k);
-    const s = t.toISOString().slice(0,10);
-    const rr = simCalc(s, k===0 && hol);
-    a += `<div class="alt ${k===0?'cur':''}"><span>${s.slice(5)} (${dw(t.getDay())})${k===0?' ◀':''}</span>
-      <div style="background:#f3f2ee;border-radius:0 4px 4px 0"><div class="bar ${GR[rr.g].cls}" style="width:${Math.max(1,rr.p*100)}%"></div></div>
-      <span class="r">${IC(rr.g)} ${ten(rr.p)}/10</span></div>`;
-  }
-  $('#alts').innerHTML = a + `<div class="note">${L('오른쪽 숫자는 비슷한 날 10번 중 만차 횟수. 같은 날 다른 행사가 이미 있으면 그 행사도 목록에 넣어야 정확합니다.','Right: full on N of 10 similar days. Add any events already booked on those days for accuracy.')}</div>`;
+  if(!SM || SM.dk !== d){ SM = {y:dt.getFullYear(), m:dt.getMonth()+1, dk:d}; }
+  renderMini();
   renderNotice();
 }
 function memoText(S){
@@ -767,6 +792,10 @@ async function copyText(txt, out){
 }
 function applyDate(){ $('#sTemp').value = tempNorm($('#sDate').value); $('#sHol').checked = HOL.has($('#sDate').value); runSim(); }
 $('#sDate').onchange = ()=>{ EX = false; applyDate(); };
+function shiftDay(n){ const t = new Date($('#sDate').value+'T00:00'); t.setDate(t.getDate()+n); $('#sDate').value = ds(t.getFullYear(), t.getMonth()+1, t.getDate()); EX = false; applyDate(); }
+$('#sPrev').onclick = ()=>shiftDay(-1); $('#sNext').onclick = ()=>shiftDay(1);
+$('#mPrev').onclick = ()=>{ SM.m--; if(SM.m<1){SM.m=12;SM.y--;} renderMini(); };
+$('#mNext').onclick = ()=>{ SM.m++; if(SM.m>12){SM.m=1;SM.y++;} renderMini(); };
 $('#sHol').onchange = ()=>{ EX = false; runSim(); }; $('#sTemp').oninput = ()=>{ EX = false; runSim(); };
 $('#addEv').onclick = ()=>{ EX = false; const V=VENUES[2]; EVS.push({v:V.k, a:V.aud, s:V.st, d:V.dur}); renderEvs(); };
 $('#addGa').onclick = ()=>{ EX = false; const V=GATHER[0]; EVS.push({v:V.k, a:V.aud, s:V.st, d:V.dur}); renderEvs(); };
@@ -893,7 +922,6 @@ $('#intro').onclick = e=>{ if(e.target.id==='intro') closeIntro(); };
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('#intro').classList.contains('hide')) closeIntro(); });
 
 // ---------- 시작 ----------
-$('#altBox').open = !NARROW();
 EX = true; $('#sDate').value='2027-05-15'; EVS=[{v:VENUES[0].k,a:12000,s:17,d:150},{v:VENUES[1].k,a:6000,s:17,d:120},{v:VENUES[2].k,a:2600,s:18,d:120}];
 $('#sTemp').value = tempNorm('2027-05-15');
 setLang(LANG, false);
