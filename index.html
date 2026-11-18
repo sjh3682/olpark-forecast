@@ -102,6 +102,13 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
 .zones{display:flex;gap:4px;flex-wrap:wrap}
 .zone{border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:12px;color:var(--ink2)}
 .zone.hot{border-color:var(--s3);background:#fdeeee;color:var(--s3);font-weight:700}
+.zhead{display:flex;align-items:center;gap:8px;margin:2px 0 6px;font-size:13px}
+.zcount{font-size:12px;font-weight:700;color:var(--s3);background:#fdeeee;border-radius:999px;padding:1px 9px}
+.zcount.none{color:var(--ink2);background:#f3f2ee;font-weight:400}
+.zwrap{width:fit-content;max-width:100%}
+.zaxis{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px;color:var(--muted)}
+.zaxis i{flex:1;height:1px;background:var(--axis);position:relative}
+.zaxis i::after{content:"";position:absolute;right:-1px;top:-3px;border:3.5px solid transparent;border-left:6px solid var(--axis)}
 /* sim */
 .evrow{display:grid;grid-template-columns:1.7fr 1fr .75fr .75fr 26px;gap:6px;margin:6px 0;align-items:center}
 .evrow select,.evrow input{min-width:0;width:100%}
@@ -564,8 +571,9 @@ function resultHTML(r, info){
     <div class="kpi"><div class="l">${L('예상 최대 주차','Expected peak')}</div><div class="v">${fmt(r.peak)}${L('대',' cars')}</div><div class="s">±${M.eval.mae_cv}${L('대(평균 오차, 참고)',' (mean error, ref.)')}</div></div>
     <div class="kpi"><div class="l">${L('최대 혼잡 시각','Busiest hour')}</div><div class="v">${hh(r.ph)}</div><div class="s">${L(`${Math.max(r.ph-1,0)}~${Math.min(r.ph+1,23)}시 집중`, `${Math.max(r.ph-1,0)}:00–${Math.min(r.ph+1,23)}:00`)}</div></div>
   </div>
-  <div class="note" style="margin-bottom:4px">${L('주차 구역 — 왼쪽일수록 2025년에 먼저 찼던 구역','Car-park zones — left = filled earliest in 2025')}${n?L(` · <b style="color:var(--s3)">빨간 칸 = 이날 찰 것으로 예상되는 ${n}개 구역</b>`, ` · <b style="color:var(--s3)">red = the ${n} zone${n>1?'s':''} expected to fill</b>`):L(' · 이날은 찰 것으로 예상되는 구역이 없습니다',' · no zone is expected to fill')}</div>
-  <div class="zones">${ZONES.map((z,i)=>`<span class="zone ${i<n?'hot':''}">${z}</span>`).join('')}</div>`;
+  <div class="zhead"><b>${L('주차 구역','Car-park zones')}</b>${n?`<span class="zcount">${L(`${n}곳 만차 예상`, `${n} expected to fill`)}</span>`:`<span class="zcount none">${L('만차 예상 구역 없음','none expected to fill')}</span>`}</div>
+  <div class="zwrap"><div class="zones">${ZONES.map((z,i)=>`<span class="zone ${i<n?'hot':''}">${z}</span>`).join('')}</div>
+  <div class="zaxis" title="${L('2025년 만차일에 구역이 찬 평균 순서','Average fill order on 2025 full days')}"><span>${L('먼저 참','Fills first')}</span><i></i><span>${L('늦게 참','Fills last')}</span></div></div>`;
 }
 function overallHTML(r, eg){
   const pg = r.g, eg_ = eg ? eg.g : 0, g = Math.max(pg, eg_);
@@ -620,7 +628,7 @@ function renderCal(){
   }
   $('#cal').innerHTML = h;
   $('#cal').querySelectorAll('.day[data-d]').forEach(el=>{
-    const go = ()=>{ selDate = el.dataset.d; renderCal(); renderDetail(); renderNotice(); if(NARROW()) $('#detail').scrollIntoView({behavior:'smooth', block:'start'}); };
+    const go = ()=>{ selDate = el.dataset.d; renderCal(); renderDetail(); renderNotice(); };
     el.onclick = go; el.onkeydown = e=>{ if(e.key==='Enter') go(); };
   });
   $('#calLegend').innerHTML = GR.map((g,i)=>`<span>${badge(i)} ${['10% 미만|<10%','10~30%|10–30%','30~60%|30–60%','60% 이상|≥60%'][i].split('|')[LANG==='en'?1:0]}</span>`).join('') +
