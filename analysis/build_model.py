@@ -15,6 +15,20 @@ h = pd.read_csv(D + 'linked_full.csv', parse_dates=['t', 'date'])
 log = pd.read_csv(D + '9781216f.csv', parse_dates=['등록일'])
 ven = pd.read_csv(D + 'event_venue.csv')
 cor = pd.read_csv('/home/claude/model/corrections.csv', parse_dates=['date'])
+# ---- 공연명 한글 표기(보도 기준)·공연장 확인값 ----
+_ko = pd.read_csv('/home/claude/model/event_names_ko.csv').fillna('')
+KO = dict(zip(_ko['원문'], _ko['한글명'])); KOV = {a: b for a, b in zip(_ko['원문'], _ko['공연장']) if b}
+# 원문 제목 안의 쉼표가 공연 구분자로 잘못 나뉜 경우 되돌림
+h['ev'] = h['ev'].str.replace('2025 정승환의 안녕, 겨울', '2025 정승환의 안녕', regex=False)
+# ---- 원본에는 있으나 실제로 취소된 공연 (공개 보도로 확인) ----
+CANCEL = {'김희재 콘서트 HEERE WE GO': ['2025-01-01', '2025-01-04']}   # 제주항공 참사 국가 애도 기간으로 서울 공연 취소(엑스포츠뉴스 2025.1.21)
+for nm, dts in CANCEL.items():
+    for dt in pd.to_datetime(dts):
+        hm = (h.date == dt) & h.ev.notna()
+        h.loc[hm, 'ev'] = h.loc[hm, 'ev'].map(lambda e: ', '.join([x for x in re.split(r',\s(?=[^\s])', e) if x.strip() != nm]) or None)
+        i = d.index[d.date == dt]
+        d.loc[i, 'nev_day'] = (d.loc[i, 'nev_day'] - 1).clip(lower=0)
+        d.loc[i, 'aud'] = 0 if (d.loc[i, 'nev_day'] == 0).all() else d.loc[i, 'aud']
 # ---- 원본 연계 데이터에서 빠진 공연 보정 (주말·휴일 '공연 없음' 27일 전수 확인, 공개 보도로 확인된 15건) ----
 for dt, g in cor.groupby('date'):
     i = d.index[d.date == dt]
@@ -141,10 +155,10 @@ for i, r in A.iterrows():
     for n in names:
         hrs = day[day.ev.str.contains(re.escape(n), regex=True)].h
         a = max(single.get(n, [0])) if n in single else None
-        evs.append({'name': n, 'venue': vmap.get(n, '미상'), 'aud': int(a) if a else None,
+        evs.append({'name': KO.get(n, n), 'orig': n, 'venue': KOV.get(n, vmap.get(n, '미상')), 'aud': int(a) if a else None,
                     'start': int(hrs.min()) if len(hrs) else None})
     for r2 in cor[cor.date == r.date].itertuples():
-        evs.append({'name': r2.name, 'venue': r2.venue, 'aud': int(r2.aud), 'start': int(r2.start), 'fixed': 1, 'src': r2.source})
+        evs.append({'name': KO.get(r2.name, r2.name), 'orig': r2.name, 'venue': r2.venue, 'aud': int(r2.aud), 'start': int(r2.start), 'fixed': 1, 'src': r2.source})
     cal.append({
         'date': r.date.strftime('%Y-%m-%d'), 'dow': int(r.dow), 'we': int(r.we), 'hol': r.hol if isinstance(r.hol, str) else '',
         'nev': int(r.nev_day), 'aud': int(r.aud), 'temp': float(r.temp),
@@ -203,7 +217,7 @@ out = {
     },
     'profile': prof, 'zones': zones, 'temp_norm': temp_norm, 'calendar': cal,
     'boot': boot, 'thresholds': thr, 'summary': summ, 'peak_per_10k_weekend': round(float(lr.coef_[0])),
-    'corrections': [{'date': r.date.strftime('%Y-%m-%d'), 'name': r.name, 'venue': r.venue, 'aud': int(r.aud), 'source': r.source, 'basis': r.aud_basis} for r in cor.itertuples()],
+    'corrections': [{'date': r.date.strftime('%Y-%m-%d'), 'name': KO.get(r.name, r.name), 'venue': r.venue, 'aud': int(r.aud), 'source': r.source, 'basis': r.aud_basis} for r in cor.itertuples()],
 }
 json.dump(out, open('/home/claude/model/model.json', 'w', encoding='utf-8'), ensure_ascii=False)
 print(json.dumps({k: out[k] for k in ['meta', 'clf', 'reg', 'poi', 'eval', 'thresholds', 'summary', 'peak_per_10k_weekend']}, ensure_ascii=False))
